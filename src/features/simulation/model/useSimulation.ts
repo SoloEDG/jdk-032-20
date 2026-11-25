@@ -26,7 +26,9 @@ export function useSimulation(document: Ref<DominoDocument>) {
         events: result.events,
         interruptedPieceId: result.interruptedPieceId,
         interruptionReason: result.interruptionReason,
-        duration: result.duration,
+        // Extra tail so the final taut pulse / arrival flash can play in replay.
+        duration: result.duration + 0.9,
+        wireEffects: result.wireEffects,
       }
       if (result.status === 'empty') issue.value = '场景里没有可运行的触发点。'
     } catch {

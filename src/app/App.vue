@@ -9,7 +9,8 @@ import { ReplayPanel } from '@/features/replay'
 import { useWorkspace } from './useWorkspace'
 
 const {
-  document, saveState, focusPieceId, layout, mechanisms, scene, simulation, review, place, move, focusEvent,
+  document, saveState, focusPieceId, layout, mechanisms, scene, simulation, review,
+  place, move, focusEvent, runSimulation,
 } = useWorkspace()
 const saveLabel = computed(() => saveState.value === 'saved' ? '已保存' : saveState.value === 'saving' ? '保存中' : '尚未保存')
 </script>
@@ -32,8 +33,14 @@ const saveLabel = computed(() => saveState.value === 'saved' ? '已保存' : sav
         <PiecePalette :active="layout.activeTool.value" @choose="layout.chooseTool" />
         <div class="rail-divider"></div>
         <MechanismPanel :document="document" :from-id="mechanisms.fromId.value" :to-id="mechanisms.toId.value"
-          :message="mechanisms.message.value" @update:from-id="mechanisms.fromId.value = $event"
-          @update:to-id="mechanisms.toId.value = $event" @add="mechanisms.add" @remove="mechanisms.remove" @toggle="mechanisms.toggle" />
+          :message="mechanisms.message.value" :message-tone="mechanisms.messageTone.value"
+          :selected-wire-id="mechanisms.selectedWireId.value"
+          @update:from-id="mechanisms.fromId.value = $event"
+          @update:to-id="mechanisms.toId.value = $event" @add="mechanisms.add" @remove="mechanisms.remove"
+          @toggle="mechanisms.toggle" @select-wire="mechanisms.selectWire"
+          @auto-route="mechanisms.autoRouteSelected" @self-check="mechanisms.endpointSelfCheck"
+          @update-slack="mechanisms.updateSelectedSlack" @slack-begin="mechanisms.beginSlackEdit"
+          @slack-commit="mechanisms.commitSelectedSlack" />
         <div class="rail-divider"></div>
         <ScenePanel :scene="document.scene" @update="scene.update" />
       </aside>
@@ -44,10 +51,15 @@ const saveLabel = computed(() => saveState.value === 'saved' ? '已保存' : sav
           <div class="revision-chip"><Dot :size="19" />修订 {{ document.revision.toString().padStart(2, '0') }}</div>
         </div>
         <BuildCanvas :document="document" :active-tool="layout.activeTool.value" :selected-id="layout.selectedId.value"
-          :run="simulation.run.value" :focus-piece-id="focusPieceId" @place="place" @select="layout.select"
-          @move="move" />
+          :run="simulation.run.value" :focus-piece-id="focusPieceId" :time="review.time.value"
+          :selected-wire-id="mechanisms.selectedWireId.value" :conflict="mechanisms.conflict.value"
+          @place="place" @select="layout.select" @move="move" @commit-piece="mechanisms.commitPieceMove"
+          @select-wire="mechanisms.selectWire"
+          @wire-vertex-move="mechanisms.moveVertexLive" @wire-vertex-add="mechanisms.addVertex"
+          @wire-vertex-remove="mechanisms.removeVertex" @wire-vertex-commit="mechanisms.commitVertex"
+          @wire-slack="mechanisms.setSlack" @wire-slack-commit="mechanisms.commitSlack" />
         <SimulationBar :run="simulation.run.value" :stale="simulation.stale.value" :busy="simulation.busy.value"
-          :issue="simulation.issue.value" @run="simulation.simulate" @reset="simulation.clear" />
+          :issue="simulation.issue.value" @run="runSimulation" @reset="simulation.clear" />
         <div class="center-footer">
           <span><Cloud :size="13" /> 本机自动保存</span><span class="footer-divider">/</span>
           <span>摆放 {{ document.pieces.length }} 件 · 连线 {{ document.connections.length }} 条</span>

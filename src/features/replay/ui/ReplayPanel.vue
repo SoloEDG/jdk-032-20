@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, CheckCircle2, CircleStop, FastForward, Pause, Play, RotateCcw, SkipBack } from '@lucide/vue'
+import { AlertTriangle, Cable, CheckCircle2, CircleStop, FastForward, Pause, Play, RotateCcw, SkipBack } from '@lucide/vue'
 import type { SimulationEvent, SimulationRun } from '@/shared/document'
 import { formatSeconds } from '@/shared/time'
 
@@ -8,8 +8,11 @@ defineProps<{
   currentEvent: SimulationEvent | null; stale: boolean
 }>()
 const emit = defineEmits<{ toggle: []; seek: [number]; restart: []; event: [string] }>()
-const iconFor = (kind: SimulationEvent['kind']) => kind === 'interrupted' ? AlertTriangle
-  : kind === 'mechanism' ? FastForward : CheckCircle2
+const iconFor = (event: SimulationEvent) => {
+  if (event.kind === 'interrupted') return AlertTriangle
+  if (event.wireId) return Cable
+  return event.kind === 'mechanism' ? FastForward : CheckCircle2
+}
 </script>
 
 <template>
@@ -40,8 +43,9 @@ const iconFor = (kind: SimulationEvent['kind']) => kind === 'interrupted' ? Aler
           <button class="event-row" :class="{ current: currentEvent?.id === event.id, interrupted: event.kind === 'interrupted' }"
             :aria-current="currentEvent?.id === event.id ? 'step' : undefined" @click="emit('event', event.id)">
             <span class="event-time mono">{{ formatSeconds(event.time) }}</span>
-            <span class="event-icon"><component :is="iconFor(event.kind)" :size="14" /></span>
+            <span class="event-icon" :class="{ wire: Boolean(event.wireId) }"><component :is="iconFor(event)" :size="14" /></span>
             <span class="event-copy"><strong>{{ run.events.find(item => item.id === event.id)?.pieceId === run.startPieceId ? '启动点' : event.detail.split(' · ')[0] }}</strong><small>{{ event.detail.split(' · ')[1] ?? event.pieceId }}</small></span>
+            <span v-if="event.wireId" class="event-flag wire-flag">拉线</span>
             <span v-if="event.kind === 'interrupted'" class="event-flag">中断</span>
           </button>
         </li>

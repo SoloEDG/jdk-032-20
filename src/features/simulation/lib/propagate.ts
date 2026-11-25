@@ -1,22 +1,53 @@
-import type { DominoDocument, Piece, SimulationEvent } from '@/shared/document'
-import { nextContact } from '@/features/layout'
+import type { DominoDocument, Piece, SimulationEvent, WireEffect } from '@/shared/document'
+import { nextContact } from '@/features/layout/lib/geometry'
+import { createWireEffect } from '@/features/mechanisms/lib/wire'
 
 interface Scheduled {
   pieceId: string
   time: number
   causeId: string | null
   detail: string
+  viaWire?: string
+  wireAction?: 'sweep' | 'pull'
+  topple?: number
 }
 
 export function propagate(document: DominoDocument) {
   const queue: Scheduled[] = [{ pieceId: document.startPieceId, time: 0, causeId: null, detail: '手动触发' }]
   const fallen = new Set<string>()
   const events: SimulationEvent[] = []
+  const wireEffects: WireEffect[] = []
   let interruptedPieceId: string | null = null
   let interruptionReason: string | null = null
   let reachedTrigger = false
 
-  while (queue.length && events.length < document.pieces.length * 3) {
+  /**
+   * A wire only acts after its slack whip has played out: the slack strand
+   * sweeps dominoes along the way, then the cord goes taut and the far
+   * endpoint is scheduled. Geometry is snapshotted into a WireEffect so the
+   * replay can redraw the exact sweep.
+   */
+  function dispatchWires(source: Piece, sourceEvent: SimulationEvent, time: number) {
+    for (const link of document.connections.filter(item => item.from === source.id && item.enabled)) {
+      const effect = createWireEffect(link, document.pieces, time)
+      if (effect) wireEffects.push(effect)
+      for (const hit of effect?.hits ?? []) {
+        queue.push({
+          pieceId: hit.pieceId, time: hit.time, causeId: sourceEvent.id,
+          detail: '松弛段扫击', viaWire: link.id, wireAction: 'sweep', topple: hit.topple,
+        })
+      }
+      queue.push({
+        pieceId: link.to, time: (effect?.arrival ?? time + link.delay), causeId: sourceEvent.id,
+        detail: effect && effect.sweepDuration > 0.02 ? '拉线拉紧后传动' : '机关连线',
+        viaWire: link.id, wireAction: 'pull',
+      })
+    }
+  }
+
+  const eventCap = Math.max(80, document.pieces.length * 6 + document.connections.length * 6)
+
+  while (queue.length && events.length < eventCap) {
     queue.sort((a, b) => a.time - b.time || a.pieceId.localeCompare(b.pieceId) || (a.causeId ?? '').localeCompare(b.causeId ?? ''))
     const next = queue.shift()!
     const piece = document.pieces.find(item => item.id === next.pieceId)
@@ -25,28 +56,31 @@ export function propagate(document: DominoDocument) {
     if (piece.kind === 'trigger') {
       const event: SimulationEvent = {
         id: `event-${events.length + 1}`, pieceId: piece.id, time: next.time,
-        causeId: next.causeId, kind: 'mechanism', detail: `触发器响应 · ${next.detail}`,
+        causeId: next.causeId, kind: 'mechanism',
+        detail: next.viaWire ? `触发器响应 · ${next.detail}` : `触发器响应 · ${next.detail}`,
+        wireId: next.viaWire,
       }
       events.push(event)
       reachedTrigger = true
-      for (const link of document.connections.filter(link => link.from === piece.id && link.enabled)) {
-        queue.push({ pieceId: link.to, time: next.time + link.delay, causeId: event.id, detail: '机关连线' })
-      }
+      dispatchWires(piece, event, next.time)
       continue
     }
 
     fallen.add(piece.id)
     const event: SimulationEvent = {
       id: `event-${events.length + 1}`, pieceId: piece.id, time: next.time,
-      causeId: next.causeId, kind: piece.kind === 'splitter' ? 'mechanism' : 'fall',
+      causeId: next.causeId,
+      kind: piece.kind === 'splitter' ? 'mechanism' : 'fall',
       detail: piece.kind === 'splitter' ? `分岔展开 · ${next.detail}`
-        : piece.kind === 'ramp' ? `坡道传递 · ${next.detail}` : `受力倒下 · ${next.detail}`,
+        : piece.kind === 'ramp' ? `坡道传递 · ${next.detail}`
+        : next.wireAction === 'sweep' ? `拉线扫倒 · ${next.detail}`
+        : `受力倒下 · ${next.detail}`,
+      wireId: next.viaWire,
+      topple: next.topple,
     }
     events.push(event)
 
-    for (const link of document.connections.filter(link => link.from === piece.id && link.enabled)) {
-      queue.push({ pieceId: link.to, time: next.time + link.delay, causeId: event.id, detail: '机关连线' })
-    }
+    dispatchWires(piece, event, next.time)
 
     const available = document.pieces.filter(item => !fallen.has(item.id) && item.id !== piece.id)
     const surfaceGrip = (document.scene.friction + piece.friction) / 2
@@ -69,7 +103,10 @@ export function propagate(document: DominoDocument) {
     }
 
     const hasConnection = document.connections.some(link => link.from === piece.id && link.enabled)
-    if (!target && !hasConnection && interruptedPieceId === null) {
+    // A domino swept away by a slack strand is a collateral effect: if it
+    // reaches nothing that is not a broken chain link and must not set the
+    // interruption marker.
+    if (!target && !hasConnection && next.wireAction !== 'sweep' && interruptedPieceId === null) {
       interruptedPieceId = piece.id
       interruptionReason = '倒下方向内没有可触达的元件，链路在此停止。'
       events.push({
@@ -81,6 +118,7 @@ export function propagate(document: DominoDocument) {
 
   return {
     events,
+    wireEffects,
     interruptedPieceId,
     interruptionReason,
     reachedTrigger,

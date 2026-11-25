@@ -68,14 +68,16 @@ export function useLayout(document: Ref<DominoDocument>, changed: () => void) {
     changed()
   }
 
-  function handleKey(event: KeyboardEvent) {
-    if (!selected.value) return
+  function handleKey(event: KeyboardEvent): { pieceId: string; before: { x: number; y: number } } | null {
+    if (!selected.value) return null
     const delta = event.shiftKey ? 0.5 : 0.1
     const steps = event.key === 'ArrowLeft' ? [-delta, 0] : event.key === 'ArrowRight' ? [delta, 0]
       : event.key === 'ArrowUp' ? [0, -delta] : event.key === 'ArrowDown' ? [0, delta] : null
-    if (!steps) return
+    if (!steps) return null
     event.preventDefault()
+    const before = { x: selected.value.x, y: selected.value.y }
     move(selected.value.id, selected.value.x + steps[0], selected.value.y + steps[1])
+    return { pieceId: selected.value.id, before }
   }
 
   return { selectedId, activeTool, selected, chooseTool, select, add, move, rotate, update, remove, handleKey }

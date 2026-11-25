@@ -7,7 +7,7 @@ import { useScene, clampToScene } from '@/features/scene'
 import { useSimulation } from '@/features/simulation'
 import { useReview } from '@/features/replay'
 
-const storageKey = 'chainline-jdk032-project-v1'
+const storageKey = 'chainline-jdk032-project-v2'
 
 function loadProject() {
   try {
@@ -73,6 +73,12 @@ export function useWorkspace() {
     layout.select(event.pieceId)
     review.focusEvent(id)
   }
+  async function runSimulation() {
+    await simulation.simulate()
+    // useReview resets the clock when a fresh run lands; start playback on
+    // the next frames so the slack sweep and taut pull actually play out.
+    requestAnimationFrame(() => requestAnimationFrame(() => review.play()))
+  }
   function onKeydown(event: KeyboardEvent) {
     const target = event.target
     if (target instanceof HTMLElement && target.matches('input, select, textarea, button')) return
@@ -82,9 +88,11 @@ export function useWorkspace() {
     } else if (event.key === 'Escape') {
       layout.chooseTool(null)
       layout.select(null)
+      mechanisms.selectWire(null)
       focusPieceId.value = null
     } else {
-      layout.handleKey(event)
+      const moved = layout.handleKey(event)
+      if (moved) mechanisms.commitPieceMove(moved.pieceId, moved.before)
     }
   }
   onMounted(() => window.addEventListener('keydown', onKeydown))
@@ -93,5 +101,5 @@ export function useWorkspace() {
     window.clearTimeout(saveTimer)
   })
 
-  return { document, saveState, focusPieceId, layout, mechanisms, scene, simulation, review, place, move, focusEvent }
+  return { document, saveState, focusPieceId, layout, mechanisms, scene, simulation, review, place, move, focusEvent, runSimulation }
 }

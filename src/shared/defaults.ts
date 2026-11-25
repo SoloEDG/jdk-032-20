@@ -20,16 +20,31 @@ export function createDefaultDocument(): DominoDocument {
     domino('d9', 15.2, 4.05, 0, '12'),
     domino('d10', 16.8, 4.05, 0, '13'),
     { ...domino('t1', 18.4, 2.3, 0, '终点 A'), kind: 'trigger', width: 0.7 },
+    // Edge domino sitting inside the slack whip fan of the long pull-wire.
+    domino('dEdge', 19.95, 3.3, 0, '边缘牌'),
+    { ...domino('t2', 13.3, 1.5, 0, '侧绕铃'), kind: 'trigger', width: 0.7 },
   ]
   return {
     id: 'chainline-starter',
-    title: '逆风转角',
+    title: '逆风转角 · 拉线',
     revision: 1,
     updatedAt: Date.now(),
     pieces,
     connections: [
       { id: 'c1', from: 's1', to: 'd7', delay: 0.15, enabled: true },
       { id: 'c2', from: 's1', to: 'd9', delay: 0.15, enabled: true },
+      {
+        // Long cord from the lower fork arm, around the outer tips of BOTH
+        // arms, up the table edge and back to the side bell. The vertical
+        // node pair hosts the slack bay that sweeps the edge domino.
+        id: 'c3', from: 'd10', to: 't2', delay: 0.15, enabled: true,
+        waypoints: [
+          { x: 17.7, y: 4.85 },
+          { x: 19.2, y: 5.35 },
+          { x: 19.2, y: 1.15 },
+        ],
+        slack: 1.15, slackSide: 1, slackSegment: 2,
+      },
     ],
     scene: { gravity: 9.8, friction: 0.62, width: 21, height: 9, showGrid: true },
     startPieceId: 'd1',
